@@ -1,61 +1,132 @@
 const express = require("express");
+const bcrypt = require('bcrypt');
+const bodyParser = require('body-parser');
+const dotenv = require('dotenv');
+const jwt = require('jsonwebtoken');
+const OpenAI = require('openai');
+
+dotenv.config();
+
+const openai = new OpenAI(process.env.OPENAI_API_KEY);
+const secretKey = process.env.SECRET_KEY;
+
 const app = express();
+app.use(bodyParser.json());
+
 const port = process.env.PORT || 3001;
 
 app.get("/", (req, res) => res.type('html').send(html));
 
-const server = app.listen(port, () => console.log(`Example app listening on port ${port}!`));
+async function getOpenAIResponse() {
+  try {
+    const completion = await openai.chat.completions.create({
+      messages: [{ role: "user", content: "Dame una idea de negocio plausible para una persona. Escribeme solo la idea, no nesito una introducción" }],
+      model: "gpt-3.5-turbo",
+      temperature: 0.7,
+      max_tokens: 100,
+      top_p: 1,
+    });
+
+    return completion.choices[0];
+  } catch (err) {
+    console.error('Error al obtener la respuesta de OpenAI:', err);
+    throw err;
+  }
+}
+
+async function getLongOpenAIResponse(idea) {
+  try {
+    const completion = await openai.chat.completions.create({
+      messages: [{ role: "user", content: `Desarrollame la siguiente idea de negocio de forma simple: ${idea}` }],
+      model: "gpt-3.5-turbo",
+      temperature: 0.3,
+      max_tokens: 500,
+      top_p: 1,
+    });
+
+    return completion.choices[0];
+  } catch (err) {
+    console.error('Error al obtener la respuesta de OpenAI:', err);
+    throw err;
+  }
+}
+
+
+function getUserByUsername(username) {
+  if (username === 'victor') {
+    return {
+      id: 1,
+      username: 'victor',
+      password: 'alba',
+    };
+  }
+
+  return null;
+}
+
+// ! una función cutre para recuperar el token de la cabecera
+
+function authenticateToken(req, res, next) {
+  const { authorization } = req.headers;
+
+  if (authorization && authorization.startsWith('Bearer ')) {
+    const token = authorization.substring(7, authorization.length);
+    try {
+      const decodedToken = jwt.verify(token, secretKey);
+      req.user = decodedToken;
+      next();
+    } catch (err) {
+      res.status(401).send({ message: 'Token inválido' });
+    }
+  } else {
+    res.status(401).send({ message: 'Token no provisto' });
+  }
+}
+
+app.post('/login', async (req, res) => {
+  const { username, password } = req.body;
+
+  try {
+    const user = await getUserByUsername(username);
+
+    if (user && bcrypt.compare(password, user.password)) {
+      const token = jwt.sign({ id: user.id }, secretKey, { expiresIn: '1h' });
+      res.send({ message: 'Autenticación exitosa', token });
+    } else {
+      res.status(401).send({ message: 'Usuario o contraseña incorrectos' });
+    }
+  } catch (error) {
+    res.status(500).send({ message: 'Error en el servidor' });
+  }
+});
+
+// ? se supone que es un middleware, pero no va xd
+// app.use('/api', expressJwt({ secret: secretKey, algorithms: ['HS256'] }));
+
+
+app.get('/api/new-idea', authenticateToken, async (req, res) => {
+  try {
+    const response = await getOpenAIResponse();
+    res.json(response);
+  } catch (err) {
+    res.status(500).json({ error: 'Error al obtener la respuesta de OpenAI' });
+  }
+});
+
+
+app.get('/api/long-idea', authenticateToken, async (req, res) => {
+  const { idea } = req.query;
+
+  try {
+    const response = await getLongOpenAIResponse(encodeURIComponent(idea));
+    res.json(response);
+  } catch (err) {
+    res.status(500).json({ error: 'Error al obtener la respuesta de OpenAI' });
+  }
+});
+
+
+const server = app.listen(port, () => console.log(`Corriendo servidor en el puerto: ${port}!`));
 
 server.keepAliveTimeout = 120 * 1000;
 server.headersTimeout = 120 * 1000;
-
-const html = `
-<!DOCTYPE html>
-<html>
-  <head>
-    <title>Hello from Render!</title>
-    <script src="https://cdn.jsdelivr.net/npm/canvas-confetti@1.5.1/dist/confetti.browser.min.js"></script>
-    <script>
-      setTimeout(() => {
-        confetti({
-          particleCount: 100,
-          spread: 70,
-          origin: { y: 0.6 },
-          disableForReducedMotion: true
-        });
-      }, 500);
-    </script>
-    <style>
-      @import url("https://p.typekit.net/p.css?s=1&k=vnd5zic&ht=tk&f=39475.39476.39477.39478.39479.39480.39481.39482&a=18673890&app=typekit&e=css");
-      @font-face {
-        font-family: "neo-sans";
-        src: url("https://use.typekit.net/af/00ac0a/00000000000000003b9b2033/27/l?primer=7cdcb44be4a7db8877ffa5c0007b8dd865b3bbc383831fe2ea177f62257a9191&fvd=n7&v=3") format("woff2"), url("https://use.typekit.net/af/00ac0a/00000000000000003b9b2033/27/d?primer=7cdcb44be4a7db8877ffa5c0007b8dd865b3bbc383831fe2ea177f62257a9191&fvd=n7&v=3") format("woff"), url("https://use.typekit.net/af/00ac0a/00000000000000003b9b2033/27/a?primer=7cdcb44be4a7db8877ffa5c0007b8dd865b3bbc383831fe2ea177f62257a9191&fvd=n7&v=3") format("opentype");
-        font-style: normal;
-        font-weight: 700;
-      }
-      html {
-        font-family: neo-sans;
-        font-weight: 700;
-        font-size: calc(62rem / 16);
-      }
-      body {
-        background: white;
-      }
-      section {
-        border-radius: 1em;
-        padding: 1em;
-        position: absolute;
-        top: 50%;
-        left: 50%;
-        margin-right: -50%;
-        transform: translate(-50%, -50%);
-      }
-    </style>
-  </head>
-  <body>
-    <section>
-      Hello from Render!
-    </section>
-  </body>
-</html>
-`
