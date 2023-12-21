@@ -91,7 +91,7 @@ app.post('/login', async (req, res) => {
 
     if (user && bcrypt.compare(password, user.password)) {
       const token = jwt.sign({ id: user.id }, secretKey, { expiresIn: '1h' });
-      res.send({ message: 'Autenticación exitosa', token });
+      res.send({ message: 'Autenticación exitosa', token, user: { username: user.username, password: user.password } });
     } else {
       res.status(401).send({ message: 'Usuario o contraseña incorrectos' });
     }
