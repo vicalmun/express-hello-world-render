@@ -20,11 +20,12 @@ app.get("/", (req, res) => res.type('html').send(html));
 async function getOpenAIResponse() {
   try {
     const completion = await openai.chat.completions.create({
-      messages: [{ role: "user", content: "Dame una idea de negocio plausible para una persona. Escribeme solo la idea, no nesito una introducción" }],
+      messages: [{ role: "user", content: "Dame una idea de negocio que sea plausible para una o dos personas. Escribeme solo la idea, no nesito una introducción" }],
       model: "gpt-3.5-turbo",
-      temperature: 0.7,
+      temperature: 0.8,
       max_tokens: 100,
-      top_p: 1,
+      top_p: 0.9,
+      frequency_penalty: 0.6,
     });
 
     return completion.choices[0];
@@ -97,6 +98,14 @@ app.post('/login', async (req, res) => {
     }
   } catch (error) {
     res.status(500).send({ message: 'Error en el servidor' });
+  }
+});
+
+app.get('/verify-token', authenticateToken, (req, res) => {
+  try {
+    res.status(200).send('Token válido');
+  } catch (error) {
+    res.status(401).send({ message: 'Token inválido' });
   }
 });
 
